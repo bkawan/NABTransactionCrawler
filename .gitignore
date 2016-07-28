@@ -92,4 +92,8 @@ ENV/
 .idea
 
 #text
+<<<<<<< HEAD
 .txt
+=======
+.txt
+>>>>>>> 062bdeeae32d734fd5cd09ad9a6d240e8e7ca28b

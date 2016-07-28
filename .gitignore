@@ -92,4 +92,4 @@ ENV/
 .idea
 
 #text
-login_details.txt
+.txt

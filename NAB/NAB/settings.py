@@ -61,9 +61,10 @@ NEWSPIDER_MODULE = 'NAB.spiders'
 
 # Configure item pipelines
 # See http://scrapy.readthedocs.org/en/latest/topics/item-pipeline.html
-#ITEM_PIPELINES = {
-#    'NAB.pipelines.SomePipeline': 300,
-#}
+ITEM_PIPELINES = {
+   # 'NAB.pipelines.SomePipeline': 300,
+   'NAB.pipelines.NabPipeline': 300,
+}
 
 # EXTENSIONS = {
 #     'scrapy.extensions.corestats.CoreStats': 500,

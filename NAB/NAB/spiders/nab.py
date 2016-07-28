@@ -7,6 +7,7 @@ from datetime import date
 import sys
 import codecs
 import locale
+import  re
 
 from NAB.items import NabItem
 
@@ -19,13 +20,11 @@ class NabSpider(scrapy.Spider):
         'https://transact.nab.com.au/nabtransact/',
     )
 
-
     def __init__(self):
         sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout)
         reload(sys)
         sys.setdefaultencoding('utf-8')
         self.today = date.today()
-
 
     def parse(self, response):
         # client_id = ''
@@ -134,7 +133,7 @@ class NabSpider(scrapy.Spider):
         next_pagi = response.xpath("//a[contains(text(),'Next')]/@href").extract_first()
         if next_pagi:
             next_link = response.urljoin(next_pagi)
-            yield scrapy.Request(next_link,callback=self.search_results,dont_filter=True)
+            yield scrapy.Request(next_link,callback=self.search_results, dont_filter=True)
         elif not empty_search_results:
             todate = self.today - timedelta(days=179)
             self.today = todate
@@ -142,7 +141,7 @@ class NabSpider(scrapy.Spider):
             print("Date", self.today)
             yield scrapy.Request(response.urljoin("txnSearch.nab"), self.search_transaction, dont_filter=True)
         else:
-            print ("No Search Result Found:",empty_search_results)
+            print ("No Search Result Found:", empty_search_results)
 
     def transaction_details(self, response):
         # inspect_response(response,self)
@@ -200,7 +199,6 @@ class NabSpider(scrapy.Spider):
             financial_response_details.append(self.strip(detail))
         """****************************************************************"""
 
-
         item = NabItem()
         item['client_id'] = self.get_index(client_details,0)
         item['trading_name'] = self.get_index(client_details,1)
@@ -210,14 +208,24 @@ class NabSpider(scrapy.Spider):
 
         item['transaction_reference'] = self.get_index(transaction_details,0)
         item['transaction_time'] = self.get_index(transaction_details,1)
-        # item['type_source'] = transaction_details[2]
         item['type'] = response.meta['type']
+
+        type_source = self.get_index(transaction_details, 2)
+        source = None
+
+        if type_source:
+            if "/" in type_source:
+                type_source = type_source.split("/")
+                source = self.get_index(type_source,1)
+
+        item['source'] = source
 
         item['channel'] = self.get_index(transaction_details,3)
         item['recurring'] = self.get_index(transaction_details,4)
         item['amount'] = response.meta['amount']
+        item['currency'] = re.search(r'[a-zA-Z]+',response.meta['amount']).group()
 
-        item ['card_type'] = response.meta['card_type']
+        item['card_type'] = response.meta['card_type']
         item['credit_card_number'] = response.meta['account_number']
         item['expiry_date'] = self.get_index(tender_details,2)
 
@@ -241,11 +249,12 @@ class NabSpider(scrapy.Spider):
     def get_index(self, item_list, index):
         try:
             value = item_list[index]
+
             try:
                 value = value.strip()
-            except:
+            except AttributeError:
                 value = value
-        except:
-            value = ""
 
+        except IndexError:
+            value = ""
         return value

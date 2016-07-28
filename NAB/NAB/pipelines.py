@@ -5,22 +5,30 @@
 # Don't forget to add your pipeline to the ITEM_PIPELINES setting
 # See: http://doc.scrapy.org/en/latest/topics/item-pipeline.html
 
-import csv
+from NAB.sheets import Sheets
+from NAB import settings
 
 csv_path = 'data/csv/'
 
 class NabPipeline(object):
 
     def __init__(self):
-        self.csvwriter = csv.writer(open('{}NAB-data.csv'.format(csv_path),'wb'))
-        self.csvwriter.writerow([
-            'Client ID', 'Transaction Reference','Date / Time','Type','Source','Channel',
-            'Processed By','Recurring','Amount','Currency','Card Type','Account Number','Expiry Date','Cardholder Name'
-        ])
+
+        self.sheet = Sheets(
+                            settings.SHEETS_PARAMETERS['spreadsheetId'],
+                            settings.SHEETS_PARAMETERS['client_secret_file'],
+                            settings.SHEETS_PARAMETERS['application_name'],
+                            settings.SHEETS_PARAMETERS['sheet_name'],
+                            )
+
+
+    def close_spider(self,spider):
+        self.sheet.sort_sheet()
+
 
     def process_item(self, item, spider):
 
-        self.csvwriter.writerow([
+        self.sheet.append_row([
             item['client_id'],
             item['transaction_reference'],
             item['transaction_time'],

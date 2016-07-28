@@ -10,23 +10,12 @@ import scrapy
 
 class NabItem(scrapy.Item):
     # define the fields for your item here like:
-    """"
-     'Client ID', '
-     Transaction Reference',
-     'Date / Time',
-     'Type',
-     'Source',
-     'Channel',
-            'Processed By',
-            'Recurring','Amount','Currency','Card Type','Account Number','Expiry Date','Cardholder Name'
-    """
+
 
     client_id = scrapy.Field()
     trading_name = scrapy.Field()
-    acquire_details = scrapy.Field()
 
     payer_name = scrapy.Field()
-    payer_email = scrapy.Field()
 
     transaction_reference = scrapy.Field()
     transaction_time = scrapy.Field()
@@ -41,11 +30,5 @@ class NabItem(scrapy.Item):
     credit_card_number = scrapy.Field()
     expiry_date = scrapy.Field()
 
-    code = scrapy.Field()
-    response_message = scrapy.Field()
-    approved = scrapy.Field()
-    bank_transaction_id = scrapy.Field()
-    authorization_code = scrapy.Field()
-    settlement_Date = scrapy.Field()
-       
+
 

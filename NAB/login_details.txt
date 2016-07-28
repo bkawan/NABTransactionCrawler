@@ -1,9 +1,9 @@
 
 https://transact.nab.com.au
 
-Client ID: Client ID
-Username: Username
-Password: Password
+Client ID: clientid
+Username: username
+Password: password
 
 Search Transactions - download a csv of all transactions or scrape (or use API?).
 Only 6 months duration is allowed for search.

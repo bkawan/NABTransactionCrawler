@@ -94,4 +94,6 @@ ENV/
 #text
 
 login_details.txt
-NAB/client_secret.json
+client_secret.json
+
+

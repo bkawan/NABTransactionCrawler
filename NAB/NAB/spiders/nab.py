@@ -67,7 +67,11 @@ class NabSpider(scrapy.Spider):
         else:
             print("*******************")
             link = response.xpath("//ul[@class='level1']/li/a/@href")
-            link = link[2].extract()
+            if link:
+                link = link[2].extract()
+            else:
+
+                link = ""
             baseurl = "https://transact.nab.com.au/nabtransact/"
             link = "{}/{}".format(baseurl, link)
             yield scrapy.Request(link, self.search_transaction)
@@ -148,48 +152,93 @@ class NabSpider(scrapy.Spider):
         # inspect_response(response,self)
 
         tables_selector = response.xpath("//table[@id='formtable']")
-        client_details_table = tables_selector[0]
-        payer_details_table = tables_selector[1]
-        transaction_details_table = tables_selector[2]
-        tender_details_tabe = tables_selector[3]
+        try:
+            client_details_table = tables_selector[0]
+        except IndexError:
+            client_details_table = False
+            print("******************************************")
+            self.logger.error(" No Selector Client Details div elements")
+            print("******************************************")
+
+
+        try:
+            payer_details_table = tables_selector[1]
+        except IndexError:
+            payer_details_table=False
+            print("******************************************")
+            self.logger.error(" No  Selector Payer Details div elements ")
+            print("******************************************")
+
+
+        try:
+            transaction_details_table = tables_selector[2]
+        except IndexError:
+            transaction_details_table =False
+            print("******************************************")
+            self.logger.error(" No  Selector for Transaction detail div  element")
+            print("******************************************")
+
+
+        try:
+            tender_details_tabe = tables_selector[3]
+        except:
+            tender_details_tabe = False
+            print("******************************************")
+            self.logger.error(" No Selector for Tender Details div elements ")
+            print("******************************************")
+
+
 
         """****************************************************************"""
 
-        client_details_selector = client_details_table.xpath(".//td[@class='value']")
-        client_details = []
-        for client_detail in client_details_selector:
-            detail = client_detail.xpath("text()").extract_first()
-            client_details.append(self.strip(detail))
+        if client_details_table:
+            client_details_selector = client_details_table.xpath(".//td[@class='value']")
+            client_details = []
+            for client_detail in client_details_selector:
+                detail = client_detail.xpath("text()").extract_first()
+                client_details.append(self.strip(detail))
+        else:
+            client_details = []
 
         """****************************************************************"""
 
-        payer_details_selector = payer_details_table.xpath(".//td[@class='value']")
-        payer_details = []
-        for payer_detail in payer_details_selector:
-            detail = payer_detail.xpath("text()").extract_first()
-            payer_details.append(self.strip(detail))
+        if payer_details_table:
+            payer_details_selector = payer_details_table.xpath(".//td[@class='value']")
+            payer_details = []
+            for payer_detail in payer_details_selector:
+                detail = payer_detail.xpath("text()").extract_first()
+                payer_details.append(self.strip(detail))
+        else:
+            payer_details = []
+
 
         """****************************************************************"""
 
-        transaction_details_selector = transaction_details_table.xpath(".//td[@class='value']")
-        transaction_details = []
-        for transaction_detail in transaction_details_selector:
-            detail = transaction_detail.xpath("text()").extract_first()
-            transaction_details.append(self.strip(detail))
-        transaction_payment_type = transaction_details_table.xpath(".//td[@class='typepay']/text()").extract_first()
+        if transaction_details_table:
+            transaction_details_selector = transaction_details_table.xpath(".//td[@class='value']")
+            transaction_details = []
+            for transaction_detail in transaction_details_selector:
+                detail = transaction_detail.xpath("text()").extract_first()
+                transaction_details.append(self.strip(detail))
+            transaction_payment_type = transaction_details_table.xpath(".//td[@class='typepay']/text()").extract_first()
 
-        transaction_details.insert(2, self.strip(transaction_payment_type))
+            transaction_details.insert(2, self.strip(transaction_payment_type))
+        else:
+            transaction_details = []
         """****************************************************************"""
 
-        tender_details_selector = tender_details_tabe.xpath(".//td[@class='value']")
-        tender_details = []
-        for tender_detail in tender_details_selector:
+        if tender_details_tabe:
+            tender_details_selector = tender_details_tabe.xpath(".//td[@class='value']")
+            tender_details = []
+            for tender_detail in tender_details_selector:
 
-            if tender_detail.xpath("img/@alt"):
-                tender_details.append(self.strip(tender_detail.xpath("img/@alt").extract_first()))
-            else:
-                detail = tender_detail.xpath("text()").extract_first()
-                tender_details.append(self.strip(detail))
+                if tender_detail.xpath("img/@alt"):
+                    tender_details.append(self.strip(tender_detail.xpath("img/@alt").extract_first()))
+                else:
+                    detail = tender_detail.xpath("text()").extract_first()
+                    tender_details.append(self.strip(detail))
+        else:
+            tender_details = []
 
 
 
@@ -220,14 +269,25 @@ class NabSpider(scrapy.Spider):
         recurring = self.get_index(transaction_details,4)
         if recurring == "No":
             recurring = "N"
+        else:
+            recurring = self.get_index(transaction_details,4)
+
         item['recurring'] = recurring
 
-        amount = re.search(r'[.0-9]+',response.meta['amount']).group()
-        if ".00" in amount:
-            amount = amount.replace(".00","")
+        amount_group = re.search(r'[.0-9]+',response.meta['amount'])
+        if amount_group:
+            amount = amount_group.group()
+            if ".00" in amount:
+                amount = amount.replace(".00","")
+        else:
+            amount = response.meta['amount']
 
         item['amount'] = amount
-        item['currency'] = re.search(r'[a-zA-Z]+',response.meta['amount']).group()
+        currency_group = re.search(r'[a-zA-Z]+',response.meta['amount'])
+        if currency_group:
+            item['currency'] = currency_group.group()
+        else:
+            item['currency'] = amount
 
         item['card_type'] = response.meta['card_type']
         item['credit_card_number'] = response.meta['account_number']

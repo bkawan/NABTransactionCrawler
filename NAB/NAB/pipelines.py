@@ -7,7 +7,7 @@
 
 from NAB.sheets import Sheets
 from NAB import settings
-
+import time
 csv_path = 'data/csv/'
 
 class NabPipeline(object):
@@ -20,6 +20,8 @@ class NabPipeline(object):
                             settings.SHEETS_PARAMETERS['application_name'],
                             settings.SHEETS_PARAMETERS['sheet_name'],
                             )
+        # last_date = '08-04-2016 13:58:20'
+
 
 
     def close_spider(self,spider):
@@ -27,6 +29,9 @@ class NabPipeline(object):
 
 
     def process_item(self, item, spider):
+
+        #item['transaction_time']= 03-08-2016 16:47:40.000
+
 
         self.sheet.append_row([
             item['client_id'],
@@ -44,5 +49,7 @@ class NabPipeline(object):
             item['expiry_date'],
             item['payer_name']
 
-        ])
+                ])
         return item
+
+

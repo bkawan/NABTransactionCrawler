@@ -9,7 +9,7 @@ import re
 from NAB.items import NabItem
 from NAB.sheets import Sheets
 from NAB import settings
-
+import time
 
 class NabSpider(scrapy.Spider):
     name = "nab"
@@ -29,12 +29,34 @@ class NabSpider(scrapy.Spider):
             settings.SHEETS_PARAMETERS['application_name'],
             settings.SHEETS_PARAMETERS['sheet_name'],
         )
+        """ Get last date from the sheet"""
         self.last_date = sheet.get_last_date()
-        date_time_group = re.search(r'(\d\d-\d\d-\d\d\d\d)+(.*?)+(\d\d:\d\d)', self.last_date)
 
+
+        """ To fill the login form  """
+        date_time_group = re.search(r'(\d\d-\d\d-\d\d\d\d)+(.*?)+(\d\d:\d\d)', self.last_date)
         self.date = date_time_group.group(1)
         self.hours_minutes = date_time_group.group(3)
+
+        """ Temporary Date to Search Again """
         self.temp_date = None
+
+        print("****************************")
+        print ('Sheet Last Date', self.last_date)
+        print ('Date', self.date)
+        print ('Hours Minutes ', self.hours_minutes)
+
+        print ('Temp Date', self.temp_date)
+        print("****************************")
+
+        try:
+            self.last_date = re.sub('\.(0+)', "", self.last_date)
+            self.last_date_epoch = int((time.mktime(time.strptime(self.last_date, '%d-%m-%Y %H:%M:%S')))) - time.timezone
+        except ValueError:
+            try:
+                self.last_date_epoch = int((time.mktime(time.strptime(self.last_date, '%d-%m-%Y %H:%M:%S')))) - time.timezone
+            except ValueError:
+                pass
 
     def parse(self, response):
 
@@ -63,9 +85,7 @@ class NabSpider(scrapy.Spider):
         if "Login Failed" in response.body:
             self.logger.error("Login failed!! Please check user name and password in login_details.txt file")
             return
-
         else:
-            print("*******************")
             link = response.xpath("//ul[@class='level1']/li/a/@href")
             if link:
                 link = link[2].extract()
@@ -75,7 +95,6 @@ class NabSpider(scrapy.Spider):
             baseurl = "https://transact.nab.com.au/nabtransact/"
             link = "{}/{}".format(baseurl, link)
             yield scrapy.Request(link, self.search_transaction)
-            print("*******************")
 
     def search_transaction(self, response):
 
@@ -107,7 +126,10 @@ class NabSpider(scrapy.Spider):
 
         empty_search_results = response.xpath("//tr[@class='empty']/td[contains(text(),'Your search did not return any results')]/text()").extract()
         table_elements = response.xpath("//table[@id='pageddatatable']")
+
         table_row_selector = table_elements.xpath(".//tbody/tr")
+
+
 
         for row in table_row_selector:
             try:
@@ -143,7 +165,7 @@ class NabSpider(scrapy.Spider):
         elif not empty_search_results:
             self.date = self.temp_date.strftime("%d/%m/%Y")
             print("*************************")
-            print("Date", self.date)
+            print("New Date To Search: ", self.date)
             yield scrapy.Request(response.urljoin("txnSearch.nab"), self.search_transaction, dont_filter=True)
         else:
             print ("No Search Result Found:", empty_search_results)
@@ -152,6 +174,7 @@ class NabSpider(scrapy.Spider):
         # inspect_response(response,self)
 
         tables_selector = response.xpath("//table[@id='formtable']")
+
         try:
             client_details_table = tables_selector[0]
         except IndexError:
@@ -240,61 +263,90 @@ class NabSpider(scrapy.Spider):
         else:
             tender_details = []
 
+        """ Convert Transaction time to epoch To comapre with last date from the sheet """
+        transaction_time = self.get_index(transaction_details, 1)
+        transaction_time_epoch = 0
+        try:
+            transaction_time = re.sub('\.(0+)', "", transaction_time)
+            transaction_time_epoch = int((time.mktime(time.strptime(transaction_time, '%d-%m-%Y %H:%M:%S')))) - time.timezone
+        except ValueError:
+            try:
+                transaction_time_epoch = int((time.mktime(time.strptime(transaction_time, '%d-%m-%Y %H:%M:%S')))) - time.timezone
+            except ValueError:
+                pass
 
 
+        print("**********************************")
+        """" Checking whether conversion time vs original time same """
 
-        item = NabItem()
+        print("Transaction Time Epoch:",transaction_time_epoch)
+        human_transaction_time = time.strftime("%m-%d-%Y %H:%M:%S", time.gmtime(transaction_time_epoch))
+        print("Comapare Transaction Time Human Readable ",human_transaction_time,self.get_index(transaction_details, 1) )
+        print("Last Date from the Sheet Epoch: ", self.last_date_epoch)
+        human_last_date = time.strftime("%m-%d-%Y %H:%M:%S", time.gmtime(self.last_date_epoch))
+        print("Comapare Last sheet Date Human Readable ",  human_last_date, self.last_date)
 
-        item['client_id'] = self.get_index(client_details,0)
-        item['trading_name'] = self.get_index(client_details,1)
-        item['payer_name'] = self.get_index(payer_details,0)
+        print("**********************************")
 
-        item['transaction_reference'] = self.get_index(transaction_details,0)
-        item['transaction_time'] = self.get_index(transaction_details,1)
-        item['type'] = response.meta['type']
+        if transaction_time_epoch > self.last_date_epoch:
+            # human_transaction_time = time.strftime("%m-%d-%Y %H:%M:%S", time.gmtime(transaction_time_epoch))
 
-        type_source = self.get_index(transaction_details, 2)
-        source = None
+            item = NabItem()
 
-        if type_source:
-            if "/" in type_source:
-                type_source = type_source.split("/")
-                source = self.get_index(type_source,1)
-                if "api" in source.lower():
-                    source = source.lower().strip('api')
-                    source = source.upper()
-        item['source'] = source
+            item['client_id'] = self.get_index(client_details,0)
+            item['trading_name'] = self.get_index(client_details,1)
+            item['payer_name'] = self.get_index(payer_details,0)
 
-        item['channel'] = self.get_index(transaction_details,3)
-        recurring = self.get_index(transaction_details,4)
-        if recurring == "No":
-            recurring = "N"
-        else:
+            item['transaction_reference'] = self.get_index(transaction_details,0)
+
+            # item['transaction_time'] = self.get_index(transaction_details, 1)
+            item['transaction_time'] = human_transaction_time
+
+            item['type'] = response.meta['type']
+
+            type_source = self.get_index(transaction_details, 2)
+            source = None
+
+            if type_source:
+                if "/" in type_source:
+                    type_source = type_source.split("/")
+                    source = self.get_index(type_source,1)
+                    if "api" in source.lower():
+                        source = source.lower().strip('api')
+                        source = source.upper()
+            item['source'] = source
+
+            item['channel'] = self.get_index(transaction_details,3)
             recurring = self.get_index(transaction_details,4)
+            if recurring == "No":
+                recurring = "N"
+            else:
+                recurring = self.get_index(transaction_details,4)
 
-        item['recurring'] = recurring
+            item['recurring'] = recurring
 
-        amount_group = re.search(r'[.0-9]+',response.meta['amount'])
-        if amount_group:
-            amount = amount_group.group()
-            if ".00" in amount:
-                amount = amount.replace(".00","")
-        else:
-            amount = response.meta['amount']
+            amount_group = re.search(r'[.0-9]+',response.meta['amount'])
+            if amount_group:
+                amount = amount_group.group()
+                if ".00" in amount:
+                    amount = amount.replace(".00","")
+            else:
+                amount = response.meta['amount']
 
-        item['amount'] = amount
-        currency_group = re.search(r'[a-zA-Z]+',response.meta['amount'])
-        if currency_group:
-            item['currency'] = currency_group.group()
-        else:
-            item['currency'] = amount
+            item['amount'] = amount
+            currency_group = re.search(r'[a-zA-Z]+',response.meta['amount'])
+            if currency_group:
+                item['currency'] = currency_group.group()
+            else:
+                item['currency'] = amount
 
-        item['card_type'] = response.meta['card_type']
-        item['credit_card_number'] = response.meta['account_number']
-        item['expiry_date'] = self.get_index(tender_details,2)
+            item['card_type'] = response.meta['card_type']
+            item['credit_card_number'] = response.meta['account_number']
+            item['expiry_date'] = self.get_index(tender_details,2)
 
 
-        yield item
+
+            yield item
 
     def strip(self, string):
 
